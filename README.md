@@ -1,3 +1,12 @@
+# Benvenuti in questo fork di InfiniteRemote
+
+Questo fork (dell'installer) si è reso necessario per alcune necessità personali nell'uso:
+ - La possibilità di usare un certificato autofirmato generato direttamente in fase di installazione (lato pubblico il servizio sarà dietro un reverse proxy che si occuperà di esporre il certificato)
+ - Avere un riepilogo finale dell'installazione
+
+Consigli e modifiche saranno ben accette.
+Per maggiori dettagli fate riferimento alla wiki ufficiale in InfiniteRemote e alla documentazione di RustDesk.
+
 # Welcome to InfiniteRemote
 
 We are based off of [RustDesk](https://github.com/rustdesk/rustdesk) and [RustDesk-API](https://github.com/kingmo888/rustdesk-api-server)
