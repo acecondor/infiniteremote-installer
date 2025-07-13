@@ -1,5 +1,23 @@
 #!/bin/bash
 
+# Funzione per installare qrencode se mancante
+install_qrencode() {
+    if ! command -v qrencode &> /dev/null; then
+        echo "Installazione di qrencode..."
+        if [ "${ID}" = "debian" ] || [ "$OS" = "Ubuntu" ] || [ "$OS" = "Debian" ]; then
+            sudo apt install -y qrencode
+        elif [ "$OS" = "CentOS" ] || [ "$OS" = "RedHat" ]; then
+            sudo yum install -y qrencode
+        elif [ "${ID}" = "arch" ]; then
+            sudo pacman -S --noconfirm qrencode
+        else
+            echo "qrencode non installato - impossibile mostrare QR code"
+            return 1
+        fi
+    fi
+    return 0
+}
+
 # Get username
 usern=$(whoami)
 admintoken=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c16)
@@ -25,6 +43,16 @@ read wanip
 if ! [[ $wanip =~ ^[a-zA-Z0-9]+([a-zA-Z0-9.-]*[a-zA-Z0-9]+)?$ ]]; then
     echo -e "Invalid domain/DNS address"
     exit 1
+fi
+
+# Scelta certificato SSL
+echo -ne "Vuoi usare Let's Encrypt per il certificato SSL? (s/n) [default: s]: "
+read use_le
+use_le=${use_le:-s}
+
+if [[ "$use_le" != "s" && "$use_le" != "n" ]]; then
+    echo -e "Scelta non valida, uso Let's Encrypt di default"
+    use_le="s"
 fi
 
 # Identify OS
@@ -78,7 +106,7 @@ fi
 
 # Setup prereqs for server
 # Common named prereqs
-PREREQ="curl wget unzip tar git qrencode python$PYTHON_MAJOR_MINOR-venv"
+PREREQ="curl wget unzip tar git python$PYTHON_MAJOR_MINOR-venv"
 PREREQDEB="dnsutils ufw "
 PREREQRPM="bind-utils"
 PREREQARCH="bind"
@@ -363,7 +391,22 @@ sudo ufw allow 443/tcp
 sudo ufw enable 
 sudo ufw reload
 
-sudo certbot --nginx -d ${wanip}
+# Installazione certificato SSL
+if [ "$use_le" = "s" ]; then
+    echo "Utilizzo Let's Encrypt per il certificato SSL"
+    sudo certbot --nginx -d ${wanip} --non-interactive --agree-tos -m admin@${wanip}
+else
+    echo "Generazione certificato auto-firmato valido 10 anni..."
+    sudo mkdir -p /etc/ssl/private
+    sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+        -keyout /etc/ssl/private/nginx-selfsigned.key \
+        -out /etc/ssl/certs/nginx-selfsigned.crt \
+        -subj "/CN=${wanip}/O=InfiniteRemote/C=IT"
+    
+    # Modifica configurazione nginx
+    sudo sed -i "s|listen 443 ssl;|listen 443 ssl;\n    ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;\n    ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key;|g" /etc/nginx/sites-available/rustdesk.conf
+    sudo systemctl restart nginx
+fi
 
 echo "Grabbing installers"
 string="{\"host\":\"${wanip}\",\"key\":\"${key}\",\"api\":\"https://${wanip}\"}"
@@ -372,7 +415,7 @@ string64rev=$(echo -n "$string64" | rev)
 
 echo "$string64rev"
 
-wget -O /opt/rustdesk-api-server/static/configs/rustdesk-licensed-$string64rev.exe https://github.com/rustdesk/rustdesk/releases/download/1.3.8/rustdesk-1.3.8-x86_64.exe 
+wget -O /opt/rustdesk-api-server/static/configs/rustdesk-licensed-$string64rev.exe  https://github.com/rustdesk/rustdesk/releases/download/1.4.0/rustdesk-1.4.0-x86_64.exe
 
 sed -i "s|secure-string|${string64rev}|g" /opt/rustdesk-api-server/api/templates/installers.html
 sed -i "s|UniqueKey|${key}|g" /opt/rustdesk-api-server/api/templates/installers.html
@@ -382,6 +425,40 @@ sed -i "s|secure-string|${string64rev}|g" /opt/rustdesk-api-server/static/config
 sed -i "s|secure-string|${string64rev}|g" /opt/rustdesk-api-server/static/configs/install-mac.sh
 sed -i "s|secure-string|${string64rev}|g" /opt/rustdesk-api-server/static/configs/install-linux.sh
 
+# Genera QR code come immagine
 qrencode -o /opt/rustdesk-api-server/static/configs/qrcode.png config=${string64rev}
 
+# Install qrencode per visualizzazione a terminale
+install_qrencode
 
+# Riepilogo finale
+echo ""
+echo "========================================================"
+echo "INSTALLAZIONE COMPLETATA CON SUCCESSO"
+echo "========================================================"
+echo "Domain:                  $wanip"
+echo "Public Key:              $key"
+echo "Admin Token:             $admintoken"
+echo "Installers personalizzati:"
+echo "  Windows:  https://$wanip/static/configs/rustdesk-licensed-$string64rev.exe"
+echo "  macOS:    https://$wanip/static/configs/install-mac.sh"
+echo "  Linux:    https://$wanip/static/configs/install-linux.sh"
+echo ""
+echo "Accesso all'interfaccia web:"
+echo "  URL:      https://$wanip"
+echo "  Username: Quello impostato durante l'installazione"
+echo ""
+echo "Firewall abilitato su porte:"
+echo "  21115-21119/tcp, 21116/udp, 80/tcp, 443/tcp"
+echo "========================================================"
+echo ""
+
+# Visualizzazione QR code in terminale
+if command -v qrencode &> /dev/null; then
+    echo "QR Code per configurazione rapida:"
+    qrencode -t ANSIUTF8 "config=${string64rev}" 2>/dev/null
+    echo "Scansiona questo QR code con l'app RustDesk per configurare automaticamente il client"
+else
+    echo "QR code non disponibile (installa qrencode per visualizzarlo)"
+    echo "Puoi trovare il QR code grafico all'URL: https://$wanip/static/configs/qrcode.png"
+fi
