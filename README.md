@@ -4,7 +4,7 @@ Questo fork (dell'installer) si è reso necessario per alcune necessità persona
  - La possibilità di usare un certificato autofirmato generato direttamente in fase di installazione (lato pubblico il servizio sarà dietro un reverse proxy che si occuperà di esporre il certificato)
  - Avere un riepilogo finale dell'installazione
 
-Consigli e modifiche saranno ben accette.
+Consigli e modifiche saranno ben accette, appena avrà tempo spero di poter finire e testare correttamente la procedura, **attualmente è da considerarsi in sviluppo!**
 Per maggiori dettagli fate riferimento alla wiki ufficiale in InfiniteRemote e alla documentazione di RustDesk.
 
 # Welcome to InfiniteRemote
